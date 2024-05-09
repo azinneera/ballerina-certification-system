@@ -1,10 +1,5 @@
 package org.PDFCreator;
 
-/**
- * This class represents the parameters required for PDF generation.
- * It includes the input file path, replacement text, font type, font size, center coordinates, font file path, and output file name.
- */
-
 public class PDFGenerationParams {
     String inputFilePath;
     String replacement;
@@ -27,7 +22,6 @@ public class PDFGenerationParams {
      * @param fontFilePath The path of the font file.
      * @param outputFileName The name of the output file.
      */
-
     public PDFGenerationParams(String inputFilePath, String replacement, String fontType, int fontSize,
                            int centerX, int centerY, String fontFilePath, String outputFileName) {
         this.inputFilePath = inputFilePath;
@@ -43,7 +37,6 @@ public class PDFGenerationParams {
      /**
      * Creates a new instance of PDFGenerationParams with the given parameters.
     */
-    
     public static PDFGenerationParams createInstance(String inputFilePath, String replacement, String fontType, int fontSize,
                            int centerX, int centerY, String fontFilePath, String outputFileName) {
         return new PDFGenerationParams(inputFilePath, replacement, fontType, fontSize, centerX, centerY, fontFilePath, outputFileName);

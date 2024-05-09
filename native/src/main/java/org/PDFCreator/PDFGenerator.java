@@ -56,7 +56,6 @@
                  contentStream.setFont(font, params.fontSize);
                  nameWidth = font.getStringWidth(params.replacement) / 1000 * params.fontSize;
                  nameHeight = (font.getFontDescriptor().getCapHeight()) / 1000 * params.fontSize;
- 
              } else {
                  PDType1Font font = getFontByName.getFontByName(params.fontType);
                  contentStream.setFont(font, params.fontSize);
@@ -77,4 +76,3 @@
          }
      }
  }
- 
