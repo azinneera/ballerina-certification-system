@@ -24,7 +24,6 @@ import ballerina/file;
 import ballerina/http;
 import ballerina/io;
 import ballerina/jballerina.java;
-import ballerina/regex;
 
 import ballerinax/googleapis.sheets as gsheets;
 
@@ -33,13 +32,6 @@ type Auth record {|
     string clientSecret;
     string refreshToken;
     string refreshUrl;
-|};
-
-type Conflict record {|
-    *http:Conflict;
-    record {
-        string message;
-    } body;
 |};
 
 configurable string pdfFilePath = ?;
@@ -80,7 +72,7 @@ public function certificateGeneration(string inputFilePath, string fontFilePath,
         gsheets:Row row = check spreadsheetClient->getRow(spreadsheetId, sheetName, i);
         if row.values[3].toString() == checkID {
             string replacement = col.values[i].toString();
-            string fileName = replacement + PDF_EXTENSION;
+            string fileName = replacement +checkID+ PDF_EXTENSION;
             filePath = OUTPUT_DIRECTORY + fileName;
             int fontsize = check int:fromString(row.values[7].toString());
             int centerX = check int:fromString(row.values[4].toString());
@@ -95,19 +87,19 @@ public function certificateGeneration(string inputFilePath, string fontFilePath,
             break;
         }
         i += 1;
-
     }
 }
 
 service / on new http:Listener(port) {
     resource function get certificates/[string value]() returns http:Response|error {
-        string[] data = regex:split(value, "-");
+        string:RegExp r = re `-`;
+        string[] data = r.split(value);
         string ID = data[1];
         string sheetName = data[0];
         error? err = certificateGeneration(pdfFilePath, fontFilePath, ID, sheetName);
         byte[]|io:Error dataRead =  io:fileReadBytes(filePath);
         http:Response response = new;
-        if err is error || dataRead is io:Error{ 
+        if err is error || dataRead is io:Error{
             response.setJsonPayload("invalid UserID ");
             response.statusCode = ERROR_CODE;
             return response;
@@ -120,4 +112,3 @@ service / on new http:Listener(port) {
         return response;
     }
 }
-

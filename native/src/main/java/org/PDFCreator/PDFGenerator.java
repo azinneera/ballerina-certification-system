@@ -25,7 +25,7 @@
  import org.apache.pdfbox.pdmodel.PDPageContentStream;
  import java.io.File;
  import java.io.IOException;
- 
+
  public class PDFGenerator {
      /**
       * This method is used to generate a PDF file with the given text.
@@ -49,7 +49,7 @@
              float centerXF = params.centerX < 0 ? (float) (page.getMediaBox().getWidth() / 2.0) : params.centerX;
              PDPageContentStream contentStream = new PDPageContentStream(pdfDocument, page,
                      PDPageContentStream.AppendMode.APPEND, true, true);
- 
+
              if ("CUSTOM".equals(params.fontType)) {
                  File fontFile = new File(params.fontFilePath);
                  PDType0Font font = PDType0Font.load(pdfDocument, fontFile);
@@ -57,7 +57,7 @@
                  nameWidth = font.getStringWidth(params.replacement) / 1000 * params.fontSize;
                  nameHeight = (font.getFontDescriptor().getCapHeight()) / 1000 * params.fontSize;
              } else {
-                 PDType1Font font = getFontByName.getFontByName(params.fontType);
+                PDType1Font font = FontType.getFontByName(params.fontType);
                  contentStream.setFont(font, params.fontSize);
                  nameWidth = font.getStringWidth(params.replacement) / 1000 * params.fontSize;
                  nameHeight = (font.getFontDescriptor().getCapHeight()) / 1000 * params.fontSize;
