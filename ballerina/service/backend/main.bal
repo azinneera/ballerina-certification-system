@@ -34,18 +34,32 @@ type Auth record {|
     string refreshUrl;
 |};
 
+type ResponseError record {|
+    *http:BadRequest;
+    record {
+        string message;
+    } body;
+|};
+
+type ResponseOK record {|
+    *http:Ok;
+    record {|
+        string Content\-Type;
+        string Content\-Disposition;
+    |} headers;
+
+    byte[] body;
+|};
+
 configurable string pdfFilePath = ?;
 configurable string fontFilePath = ?;
-configurable int port = 9090;
+configurable int port = 8080;
 configurable string spreadsheetId = ?;
 configurable Auth auth = ?;
 
 const PDF_EXTENSION = ".pdf";
 const OUTPUT_DIRECTORY = "outputs/";
-const FILE_NAME = "certificate.pdf";
 const NAME_COLUMN = "C";
-const SUCCESS_CODE = 200;
-const ERROR_CODE = 400;
 const CONTENT_TYPE = "application/pdf";
 const CONTENT_DISPOSITION = "inline; filename='certificate.pdf'";
 
@@ -91,24 +105,28 @@ public function certificateGeneration(string inputFilePath, string fontFilePath,
 }
 
 service / on new http:Listener(port) {
-    resource function get certificates/[string value]() returns http:Response|error {
+    resource function get certificates/[string value]() returns ResponseOK|ResponseError {
         string:RegExp r = re `-`;
         string[] data = r.split(value);
         string ID = data[1];
         string sheetName = data[0];
+        byte[] payload;
         error? err = certificateGeneration(pdfFilePath, fontFilePath, ID, sheetName);
         byte[]|io:Error dataRead =  io:fileReadBytes(filePath);
-        http:Response response = new;
-        if err is error || dataRead is io:Error{
-            response.setJsonPayload("invalid UserID ");
-            response.statusCode = ERROR_CODE;
-            return response;
+        if err is error {
+            return {body: { message: "Invalid Request" }};
         }
-        response.setPayload(check io:fileReadBytes(filePath));
-        response.statusCode = SUCCESS_CODE;
-        response.setHeader("Content-Type", CONTENT_TYPE);
-        response.setHeader("Content-Disposition", CONTENT_DISPOSITION);
-        check file:remove(filePath);
-        return response;
+        else if dataRead is io:Error {
+            return {body: { message: "Error in getting PDF" }};
+        }
+        else{
+            payload = dataRead;
+            error? removeFile =deleteFile(filePath);
+            return {headers: { Content\-Type: CONTENT_TYPE, Content\-Disposition: CONTENT_DISPOSITION }, body: payload};
+        }
     }
+}
+
+public function deleteFile(string filePath) returns error?{
+    return check file:remove(filePath);
 }
