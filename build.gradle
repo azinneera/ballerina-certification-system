@@ -1,0 +1,47 @@
+plugins {
+    id 'java'
+  
+}
+
+group = 'org.PDFCreator'
+version = '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()   
+}
+
+dependencies {
+    testImplementation platform('org.junit:junit-bom:5.9.1')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    implementation 'org.apache.pdfbox:pdfbox:2.0.31'   
+}
+
+sourceSets {
+    main {
+        java {
+            srcDir 'native/src/main/java'
+        }
+    }
+}
+
+test {
+    useJUnitPlatform()
+}
+
+task customFatJar(type: Jar) {
+    manifest {
+        attributes 'Main-Class': 'org.PDFCreator.PDFGenerator' 
+    }
+    archiveBaseName = 'pdf_creator'
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from { configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) } }
+    with jar
+}
+task buildBallerina(type: Exec) {
+    dependsOn customFatJar
+    commandLine 'bal', 'build', "$rootDir/ballerina/service/backend"
+}
+
+build.dependsOn buildBallerina
+
+
