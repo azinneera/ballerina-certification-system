@@ -53,11 +53,11 @@
              if ("CUSTOM".equals(params.fontType)) {
                  File fontFile = new File(params.fontFilePath);
                  PDType0Font font = PDType0Font.load(pdfDocument, fontFile);
-                 contentStream.setFont(font, params.fontSize);
+                 contentStream.setFont(PDType1Font.HELVETICA, params.fontSize);
                  nameWidth = font.getStringWidth(params.replacement) / 1000 * params.fontSize;
                  nameHeight = (font.getFontDescriptor().getCapHeight()) / 1000 * params.fontSize;
              } else {
-                PDType1Font font = FontType.getFontByName(params.fontType);
+                 PDType1Font font = PDType1Font.HELVETICA;
                  contentStream.setFont(font, params.fontSize);
                  nameWidth = font.getStringWidth(params.replacement) / 1000 * params.fontSize;
                  nameHeight = (font.getFontDescriptor().getCapHeight()) / 1000 * params.fontSize;

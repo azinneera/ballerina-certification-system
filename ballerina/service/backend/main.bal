@@ -26,12 +26,15 @@ import ballerina/io;
 import ballerina/jballerina.java;
 
 import ballerinax/googleapis.sheets as gsheets;
+import ballerinax/googleapis.drive as drive;
+import ballerina/os;
+import ballerina/lang.runtime;
 
 type Auth record {|
     string clientId;
     string clientSecret;
     string refreshToken;
-    string refreshUrl;
+    string refreshUrl = gsheets:REFRESH_URL;
 |};
 
 type ResponseError record {|
@@ -51,8 +54,7 @@ type ResponseOK record {|
     byte[] body;
 |};
 
-configurable string pdfFilePath = ?;
-configurable string fontFilePath = ?;
+configurable string fontFilePath = "Helvetica";
 configurable int port = 8080;
 configurable string spreadsheetId = ?;
 configurable Auth auth = ?;
@@ -67,6 +69,12 @@ gsheets:Client spreadsheetClient = check new ({
     auth
 });
 
+drive:ConnectionConfig driveConfig = {
+    auth 
+};
+
+drive:Client driveClient = check new (driveConfig);
+
 string filePath = "";
 
 isolated function generatePdf(handle pdfGenerator) = @java:Method {
@@ -79,22 +87,27 @@ isolated function generateParams(handle inputFilePath, handle replacement, handl
     name: "createInstance"
 } external;
 
-public function certificateGeneration(string inputFilePath, string fontFilePath, string checkID, string sheetName) returns error? {
+public function certificateGeneration(string fontFilePath, string checkID, string sheetName) returns error? {
     gsheets:Column col = check spreadsheetClient->getColumn(spreadsheetId, sheetName, NAME_COLUMN);
     int i = 1;
-    while i < col.values.length() {
+    while i <= col.values.length() {
         gsheets:Row row = check spreadsheetClient->getRow(spreadsheetId, sheetName, i);
         if row.values[3].toString() == checkID {
-            string replacement = col.values[i].toString();
-            string fileName = replacement +checkID+ PDF_EXTENSION;
+            string replacement = row.values[2].toString();
+            string fileName = replacement + checkID + PDF_EXTENSION;
             filePath = OUTPUT_DIRECTORY + fileName;
-            int fontsize = check int:fromString(row.values[7].toString());
-            int centerX = check int:fromString(row.values[4].toString());
-            int centerY = check int:fromString(row.values[5].toString());
+
+            int fontsize = check int:fromString(row.values[4].toString());
+            int centerX = check int:fromString(row.values[5].toString());
+            int centerY = check int:fromString(row.values[6].toString());
             handle javastrName = java:fromString(replacement);
-            handle javafontType = java:fromString(row.values[6].toString());
+            handle javafontType = java:fromString(row.values[7].toString());
+
+            handle certTemplateUrl = java:fromString(row.values[8].toString());
+            check getCertTemplate(certTemplateUrl, fileName);
+
             handle javafontPath = java:fromString(fontFilePath);
-            handle pdfpath = java:fromString(inputFilePath);
+            handle pdfpath = java:fromString(fileName);
             handle javaOurputfileName = java:fromString(fileName);
             handle pdfData = generateParams(pdfpath, javastrName, javafontType, fontsize, centerX, centerY, javafontPath, javaOurputfileName);
             generatePdf(pdfData);
@@ -104,6 +117,11 @@ public function certificateGeneration(string inputFilePath, string fontFilePath,
     }
 }
 
+function getCertTemplate(handle url, string fileName) returns os:Error? {
+     _ = check os:exec({value: "curl", arguments: ["-L", "-o", fileName, url.toString()]});
+     runtime:sleep(3);
+}
+
 service / on new http:Listener(port) {
     resource function get certificates/[string value]() returns ResponseOK|ResponseError {
         string:RegExp r = re `-`;
@@ -111,13 +129,13 @@ service / on new http:Listener(port) {
         string ID = data[1];
         string sheetName = data[0];
         byte[] payload;
-        error? err = certificateGeneration(pdfFilePath, fontFilePath, ID, sheetName);
+        error? err = certificateGeneration(fontFilePath, ID, sheetName);
         byte[]|io:Error dataRead =  io:fileReadBytes(filePath);
         if err is error {
             return {body: { message: "Invalid Request" }};
         }
         else if dataRead is io:Error {
-            return {body: { message: "Error in getting PDF" }};
+            return {body: { message: dataRead.detail().toString() }};
         }
         else{
             payload = dataRead;
