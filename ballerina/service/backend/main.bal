@@ -111,27 +111,28 @@ function getCertTemplate(handle url, string fileName) returns os:Error? {
 }
 
 service / on new http:Listener(port) {
-    resource function get certificates/[string value]() returns http:Ok|http:BadRequest|http:NotFound|http:InternalServerError|io:Error {
+    resource function get certificates/[string value]() returns http:InternalServerError|http:NotFound|error|http:Ok {
         string:RegExp r = re `-`;
         string[] data = r.split(value);
         string ID = data[1];
         string sheetName = data[0];
-        byte[] payload;
         error?|http:NotFound err = certificateGeneration(fontFilePath, ID, sheetName);
         if err is http:NotFound {
             return err;
         }
+        if err is error {
+            return err;
+        }
 
         byte[]|io:Error dataRead =  io:fileReadBytes(filePath);
-        if err is io:Error {
-            return <http:InternalServerError>{body: {message: err.message()}};
+        if dataRead is io:Error {
+            return <http:InternalServerError>{body: {message: dataRead.message()}};
         } else {
-            payload = check dataRead;
             error? fileResult = deleteFile(filePath);
             if fileResult is error {
                 // ignore
             }
-            return <http:Ok>{headers: { Content\-Type: CONTENT_TYPE, Content\-Disposition: CONTENT_DISPOSITION }, body: payload};
+            return <http:Ok>{headers: { Content\-Type: CONTENT_TYPE, Content\-Disposition: CONTENT_DISPOSITION }, body: dataRead};
         }
     }
 }
