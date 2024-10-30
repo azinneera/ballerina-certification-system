@@ -38,7 +38,7 @@ type Auth record {|
 |};
 
 configurable string fontFilePath = "Helvetica";
-configurable int port = 8080;
+configurable int port = ?;
 configurable string spreadsheetId = ?;
 configurable Auth auth = ?;
 
