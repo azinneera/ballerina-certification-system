@@ -5,6 +5,7 @@ version = "0.1.0"
 distribution = "2201.9.0"
 
 [[platform.java17.dependency]]
-path="../../../build/libs/pdf_creator-1.0-SNAPSHOT.jar"
+path="platform-libs/pdf_creator-1.0-SNAPSHOT.jar"
+
 [build-options]
 observabilityIncluded = true

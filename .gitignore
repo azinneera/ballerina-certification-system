@@ -29,6 +29,7 @@ replay_pid*
 .gradle
 build/
 !gradle/wrapper/gradle-wrapper.jar
+!ballerina/service/backend/platform-libs/*.jar
 **/src/main/**/build/
 **/src/test/**/build/
 Config.toml

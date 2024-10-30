@@ -37,23 +37,6 @@ type Auth record {|
     string refreshUrl = gsheets:REFRESH_URL;
 |};
 
-type ResponseError record {|
-    *http:BadRequest;
-    record {
-        string message;
-    } body;
-|};
-
-type ResponseOK record {|
-    *http:Ok;
-    record {|
-        string Content\-Type;
-        string Content\-Disposition;
-    |} headers;
-
-    byte[] body;
-|};
-
 configurable string fontFilePath = "Helvetica";
 configurable int port = 8080;
 configurable string spreadsheetId = ?;
@@ -87,11 +70,15 @@ isolated function generateParams(handle inputFilePath, handle replacement, handl
     name: "createInstance"
 } external;
 
-public function certificateGeneration(string fontFilePath, string checkID, string sheetName) returns error? {
-    gsheets:Column col = check spreadsheetClient->getColumn(spreadsheetId, sheetName, NAME_COLUMN);
+public function certificateGeneration(string fontFilePath, string checkID, string sheetName) returns error?|http:NotFound {
+    gsheets:Column|error col = spreadsheetClient->getColumn(spreadsheetId, sheetName, NAME_COLUMN);
+    if col is error {
+        return <http:NotFound> {body: {message: "No certificate found for the credential ID"}};
+    }
+    
     int i = 1;
-    while i <= col.values.length() {
-        gsheets:Row row = check spreadsheetClient->getRow(spreadsheetId, sheetName, i);
+    while i < col.values.length() {
+        gsheets:Row row = check spreadsheetClient->getRow(spreadsheetId, sheetName, i + 1);
         if row.values[3].toString() == checkID {
             string replacement = row.values[2].toString();
             string fileName = replacement + checkID + PDF_EXTENSION;
@@ -111,10 +98,11 @@ public function certificateGeneration(string fontFilePath, string checkID, strin
             handle javaOurputfileName = java:fromString(fileName);
             handle pdfData = generateParams(pdfpath, javastrName, javafontType, fontsize, centerX, centerY, javafontPath, javaOurputfileName);
             generatePdf(pdfData);
-            break;
+            return;
         }
         i += 1;
     }
+    return <http:NotFound> {body: {message: "No certificate found for the credential ID"}};
 }
 
 function getCertTemplate(handle url, string fileName) returns os:Error? {
@@ -123,24 +111,27 @@ function getCertTemplate(handle url, string fileName) returns os:Error? {
 }
 
 service / on new http:Listener(port) {
-    resource function get certificates/[string value]() returns ResponseOK|ResponseError {
+    resource function get certificates/[string value]() returns http:Ok|http:BadRequest|http:NotFound|http:InternalServerError|io:Error {
         string:RegExp r = re `-`;
         string[] data = r.split(value);
         string ID = data[1];
         string sheetName = data[0];
         byte[] payload;
-        error? err = certificateGeneration(fontFilePath, ID, sheetName);
+        error?|http:NotFound err = certificateGeneration(fontFilePath, ID, sheetName);
+        if err is http:NotFound {
+            return err;
+        }
+
         byte[]|io:Error dataRead =  io:fileReadBytes(filePath);
-        if err is error {
-            return {body: { message: "Invalid Request" }};
-        }
-        else if dataRead is io:Error {
-            return {body: { message: dataRead.detail().toString() }};
-        }
-        else{
-            payload = dataRead;
-            error? removeFile =deleteFile(filePath);
-            return {headers: { Content\-Type: CONTENT_TYPE, Content\-Disposition: CONTENT_DISPOSITION }, body: payload};
+        if err is io:Error {
+            return <http:InternalServerError>{body: {message: err.message()}};
+        } else {
+            payload = check dataRead;
+            error? fileResult = deleteFile(filePath);
+            if fileResult is error {
+                // ignore
+            }
+            return <http:Ok>{headers: { Content\-Type: CONTENT_TYPE, Content\-Disposition: CONTENT_DISPOSITION }, body: payload};
         }
     }
 }
