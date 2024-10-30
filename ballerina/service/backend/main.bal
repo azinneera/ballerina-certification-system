@@ -27,8 +27,6 @@ import ballerina/jballerina.java;
 
 import ballerinax/googleapis.sheets as gsheets;
 import ballerinax/googleapis.drive as drive;
-import ballerina/os;
-import ballerina/lang.runtime;
 
 type Auth record {|
     string clientId;
@@ -105,9 +103,10 @@ public function certificateGeneration(string fontFilePath, string checkID, strin
     return <http:NotFound> {body: {message: "No certificate found for the credential ID"}};
 }
 
-function getCertTemplate(handle url, string fileName) returns os:Error? {
-     _ = check os:exec({value: "curl", arguments: ["-L", "-o", fileName, url.toString()]});
-     runtime:sleep(3);
+function getCertTemplate(handle url, string fileName) returns error? {
+    http:Client httpEP = check new (url.toString(), followRedirects = {enabled: true});
+    http:Response e = check httpEP->get("");
+    return io:fileWriteBlocksFromStream(fileName, check e.getByteStream());
 }
 
 service / on new http:Listener(port) {
