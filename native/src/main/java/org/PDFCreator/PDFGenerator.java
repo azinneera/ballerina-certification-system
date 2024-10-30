@@ -25,6 +25,7 @@
  import org.apache.pdfbox.pdmodel.PDPageContentStream;
  import java.io.File;
  import java.io.IOException;
+import java.nio.file.Paths;
 
  public class PDFGenerator {
      /**
@@ -33,15 +34,14 @@
       * @param params The parameters for PDF generation.
       */
      public static void pdf(PDFGenerationParams params) {
-         String outputDirectory = "outputs/";
          File inputFile = new File(params.inputFilePath);
-         File outputDir = new File(outputDirectory);
+         File outputDir = Paths.get(params.outputFileName).getParent().toFile();
          float nameHeight = 0;
          float nameWidth = 0;
          if (!outputDir.exists()) {
              outputDir.mkdirs();
          }
-         String outputFilePath = outputDirectory + params.outputFileName;
+         
          try (PDDocument pdfDocument = PDDocument.load(inputFile)) {
              PDPage page = pdfDocument.getPage(0);
              // if centerX is negative, the text will be centered horizontally
@@ -69,8 +69,8 @@
              contentStream.showText(params.replacement);
              contentStream.endText();
              contentStream.close();
-             pdfDocument.save(outputFilePath);
-             System.out.println("Name written successfully. Modified PDF saved to: " + outputFilePath);
+             pdfDocument.save(params.outputFileName);
+             System.out.println("Name written successfully. Modified PDF saved to: " + params.outputFileName);
          } catch (IOException e) {
              e.printStackTrace();
          }

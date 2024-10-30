@@ -27,6 +27,8 @@ import ballerina/jballerina.java;
 
 import ballerinax/googleapis.sheets as gsheets;
 import ballerinax/googleapis.drive as drive;
+import ballerina/log;
+import ballerina/lang.runtime;
 
 type Auth record {|
     string clientId;
@@ -41,10 +43,11 @@ configurable string spreadsheetId = ?;
 configurable Auth auth = ?;
 
 const PDF_EXTENSION = ".pdf";
-const OUTPUT_DIRECTORY = "outputs/";
 const NAME_COLUMN = "C";
 const CONTENT_TYPE = "application/pdf";
 const CONTENT_DISPOSITION = "inline; filename='certificate.pdf'";
+
+string tmpDir = "";
 
 gsheets:Client spreadsheetClient = check new ({
     auth
@@ -80,7 +83,7 @@ public function certificateGeneration(string fontFilePath, string checkID, strin
         if row.values[3].toString() == checkID {
             string replacement = row.values[2].toString();
             string fileName = replacement + checkID + PDF_EXTENSION;
-            filePath = OUTPUT_DIRECTORY + fileName;
+            filePath = check file:joinPath(tmpDir, fileName);
 
             int fontsize = check int:fromString(row.values[4].toString());
             int centerX = check int:fromString(row.values[5].toString());
@@ -89,11 +92,12 @@ public function certificateGeneration(string fontFilePath, string checkID, strin
             handle javafontType = java:fromString(row.values[7].toString());
 
             handle certTemplateUrl = java:fromString(row.values[8].toString());
-            check getCertTemplate(certTemplateUrl, fileName);
+            string templatePath = check file:joinPath(tmpDir, "template", fileName);
+            check getCertTemplate(certTemplateUrl, templatePath);
 
             handle javafontPath = java:fromString(fontFilePath);
-            handle pdfpath = java:fromString(fileName);
-            handle javaOurputfileName = java:fromString(fileName);
+            handle pdfpath = java:fromString(templatePath);
+            handle javaOurputfileName = java:fromString(filePath);
             handle pdfData = generateParams(pdfpath, javastrName, javafontType, fontsize, centerX, centerY, javafontPath, javaOurputfileName);
             generatePdf(pdfData);
             return;
@@ -106,10 +110,18 @@ public function certificateGeneration(string fontFilePath, string checkID, strin
 function getCertTemplate(handle url, string fileName) returns error? {
     http:Client httpEP = check new (url.toString(), followRedirects = {enabled: true});
     http:Response e = check httpEP->get("");
-    return io:fileWriteBlocksFromStream(fileName, check e.getByteStream());
+    io:Error? fileWriteBlocksFromStream = io:fileWriteBlocksFromStream(fileName, check e.getByteStream());
+    runtime:sleep(3);
+    return fileWriteBlocksFromStream;
 }
 
 service / on new http:Listener(port) {
+
+    function init() returns error? {
+        tmpDir = check file:createTempDir();
+        log:printInfo("Started the service...");
+        log:printInfo("Created the output directory: " + tmpDir);
+    }
     resource function get certificates/[string value]() returns http:InternalServerError|http:NotFound|error|http:Ok {
         string:RegExp r = re `-`;
         string[] data = r.split(value);
