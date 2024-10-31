@@ -45,7 +45,6 @@ configurable Auth auth = ?;
 const PDF_EXTENSION = ".pdf";
 const NAME_COLUMN = "C";
 const CONTENT_TYPE = "application/pdf";
-const CONTENT_DISPOSITION = "inline; filename='certificate.pdf'";
 
 string tmpDir = "";
 
@@ -143,7 +142,8 @@ service / on new http:Listener(port) {
             if fileResult is error {
                 // ignore
             }
-            return <http:Ok>{headers: { Content\-Type: CONTENT_TYPE, Content\-Disposition: CONTENT_DISPOSITION }, body: dataRead};
+            string content_disposition = "inline; filename=" + value + ".pdf";
+            return <http:Ok>{headers: { Content\-Type: CONTENT_TYPE, Content\-Disposition: content_disposition }, body: dataRead};
         }
     }
 }
