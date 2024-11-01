@@ -57,7 +57,7 @@ import java.nio.file.Paths;
                  nameWidth = font.getStringWidth(params.replacement) / 1000 * params.fontSize;
                  nameHeight = (font.getFontDescriptor().getCapHeight()) / 1000 * params.fontSize;
              } else {
-                 PDType1Font font = PDType1Font.HELVETICA;
+                 PDType1Font font = FontType.getFontByName(params.fontType);
                  contentStream.setFont(font, params.fontSize);
                  nameWidth = font.getStringWidth(params.replacement) / 1000 * params.fontSize;
                  nameHeight = (font.getFontDescriptor().getCapHeight()) / 1000 * params.fontSize;
