@@ -81,26 +81,26 @@ isolated function generateParams(handle inputFilePath, handle replacement, handl
 
 public function certificateGeneration(string inputFilePath, string fontFilePath, string checkID, string sheetName) returns error? {
     gsheets:Column col = check spreadsheetClient->getColumn(spreadsheetId, sheetName, NAME_COLUMN);
-    int i = 1;
-    while i < col.values.length() {
-        gsheets:Row row = check spreadsheetClient->getRow(spreadsheetId, sheetName, i);
-        if row.values[3].toString() == checkID {
-            string replacement = col.values[i].toString();
-            string fileName = replacement +checkID+ PDF_EXTENSION;
-            filePath = OUTPUT_DIRECTORY + fileName;
-            int fontsize = check int:fromString(row.values[7].toString());
-            int centerX = check int:fromString(row.values[4].toString());
-            int centerY = check int:fromString(row.values[5].toString());
-            handle javastrName = java:fromString(replacement);
-            handle javafontType = java:fromString(row.values[6].toString());
-            handle javafontPath = java:fromString(fontFilePath);
-            handle pdfpath = java:fromString(inputFilePath);
-            handle javaOurputfileName = java:fromString(fileName);
-            handle pdfData = generateParams(pdfpath, javastrName, javafontType, fontsize, centerX, centerY, javafontPath, javaOurputfileName);
-            generatePdf(pdfData);
-            break;
+    string a1Notation = string `A2:${col.values.length()}`;
+    gsheets:Range range = check spreadsheetClient->getRange(spreadsheetId, sheetName, a1Notation);
+    foreach var entry in range.values {
+        if entry[3].toString() != checkID {
+            continue;
         }
-        i += 1;
+        string replacement = entry[2].toString();
+        string fileName = replacement + checkID + PDF_EXTENSION;
+        filePath = OUTPUT_DIRECTORY + fileName;
+        int fontsize = check int:fromString(entry[4].toString());
+        int centerX = check int:fromString(entry[5].toString());
+        int centerY = check int:fromString(entry[6].toString());
+        handle javastrName = java:fromString(replacement);
+        handle javafontType = java:fromString(entry[7].toString());
+        handle javafontPath = java:fromString(fontFilePath);
+        handle pdfpath = java:fromString(inputFilePath);
+        handle javaOurputfileName = java:fromString(fileName);
+        handle pdfData = generateParams(pdfpath, javastrName, javafontType, fontsize, centerX, centerY, javafontPath, javaOurputfileName);
+        generatePdf(pdfData);
+        break;
     }
 }
 
