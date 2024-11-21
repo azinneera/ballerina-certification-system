@@ -75,33 +75,32 @@ public function certificateGeneration(string fontFilePath, string checkID, strin
     if col is error {
         return <http:NotFound> {body: {message: "No certificate found for the credential ID"}};
     }
-    
-    int i = 1;
-    while i < col.values.length() {
-        gsheets:Row row = check spreadsheetClient->getRow(spreadsheetId, sheetName, i + 1);
-        if row.values[3].toString() == checkID {
-            string replacement = row.values[2].toString();
-            string fileName = replacement + checkID + PDF_EXTENSION;
-            filePath = check file:joinPath(tmpDir, fileName);
-
-            int fontsize = check int:fromString(row.values[4].toString());
-            int centerX = check int:fromString(row.values[5].toString());
-            int centerY = check int:fromString(row.values[6].toString());
-            handle javastrName = java:fromString(replacement);
-            handle javafontType = java:fromString(row.values[7].toString());
-
-            handle certTemplateUrl = java:fromString(row.values[8].toString());
-            string templatePath = check file:joinPath(tmpDir, "template", fileName);
-            check getCertTemplate(certTemplateUrl, templatePath);
-
-            handle javafontPath = java:fromString(fontFilePath);
-            handle pdfpath = java:fromString(templatePath);
-            handle javaOurputfileName = java:fromString(filePath);
-            handle pdfData = generateParams(pdfpath, javastrName, javafontType, fontsize, centerX, centerY, javafontPath, javaOurputfileName);
-            generatePdf(pdfData);
-            return;
+    string a1Notation = string `A2:${col.values.length()}`;
+    gsheets:Range range = check spreadsheetClient->getRange(spreadsheetId, sheetName, a1Notation);
+    foreach var entry in range.values {
+        if entry[3].toString() != checkID {
+            continue;
         }
-        i += 1;
+        string replacement = entry[2].toString();
+        string fileName = replacement + checkID + PDF_EXTENSION;
+        filePath = check file:joinPath(tmpDir, fileName);
+
+        int fontsize = check int:fromString(entry[4].toString());
+        int centerX = check int:fromString(entry[5].toString());
+        int centerY = check int:fromString(entry[6].toString());
+        handle javastrName = java:fromString(replacement);
+        handle javafontType = java:fromString(entry[7].toString());
+
+        handle certTemplateUrl = java:fromString(entry[8].toString());
+        string templatePath = check file:joinPath(tmpDir, "template", fileName);
+        check getCertTemplate(certTemplateUrl, templatePath);
+        
+        handle javafontPath = java:fromString(fontFilePath);
+        handle pdfpath = java:fromString(templatePath);
+        handle javaOurputfileName = java:fromString(filePath);
+        handle pdfData = generateParams(pdfpath, javastrName, javafontType, fontsize, centerX, centerY, javafontPath, javaOurputfileName);
+        generatePdf(pdfData);
+        return;
     }
     return <http:NotFound> {body: {message: "No certificate found for the credential ID"}};
 }
