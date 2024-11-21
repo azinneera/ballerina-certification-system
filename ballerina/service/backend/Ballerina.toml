@@ -2,7 +2,7 @@
 org = "wso2"
 name = "ballerina_certification_system"
 version = "0.1.0"
-distribution = "2201.9.0"
+distribution = "2201.10.2"
 
 [[platform.java17.dependency]]
 path="platform-libs/pdf_creator-1.0-SNAPSHOT.jar"
