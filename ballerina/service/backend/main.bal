@@ -46,8 +46,6 @@ const PDF_EXTENSION = ".pdf";
 const NAME_COLUMN = "C";
 const CONTENT_TYPE = "application/pdf";
 
-string tmpDir = "";
-
 gsheets:Client spreadsheetClient = check new ({
     auth
 });
@@ -57,8 +55,23 @@ drive:ConnectionConfig driveConfig = {
 };
 
 drive:Client driveClient = check new (driveConfig);
-
+string tmpDir = "";
 string filePath = "";
+map<gsheets:Range> sheetRangeMap = {};
+
+function init() returns error? {
+    gsheets:Sheet[] sheets = check spreadsheetClient->getSheets(spreadsheetId);
+    foreach gsheets:Sheet sheet in sheets {
+        string sheetName = sheet.properties.title;
+        if sheetName == "Available UUIDs" {
+            continue;
+        }
+        gsheets:Column col = check spreadsheetClient->getColumn(spreadsheetId, sheetName, NAME_COLUMN);
+        string a1Notation = string `A2:${col.values.length()}`;
+        gsheets:Range range = check spreadsheetClient->getRange(spreadsheetId, sheetName, a1Notation);
+        sheetRangeMap[sheetName] = range;
+    }
+}
 
 isolated function generatePdf(handle pdfGenerator) = @java:Method {
     'class: "org.PDFCreator.PDFGenerator",
@@ -70,13 +83,14 @@ isolated function generateParams(handle inputFilePath, handle replacement, handl
     name: "createInstance"
 } external;
 
-public function certificateGeneration(string fontFilePath, string checkID, string sheetName) returns error?|http:NotFound {
-    gsheets:Column|error col = spreadsheetClient->getColumn(spreadsheetId, sheetName, NAME_COLUMN);
-    if col is error {
-        return <http:NotFound> {body: {message: "No certificate found for the credential ID"}};
+public function certificateGeneration(string fontFilePath, string checkID, string sheetName) 
+    returns error?|http:NotFound|http:BadRequest {
+    
+    if !sheetRangeMap.hasKey(sheetName) {
+        return <http:BadRequest> {body: {message: "Invalid credential ID provided"}};
     }
-    string a1Notation = string `A2:${col.values.length()}`;
-    gsheets:Range range = check spreadsheetClient->getRange(spreadsheetId, sheetName, a1Notation);
+    gsheets:Range range = sheetRangeMap.get(sheetName);
+
     foreach var entry in range.values {
         if entry[3].toString() != checkID {
             continue;
@@ -120,16 +134,13 @@ service / on new http:Listener(port) {
         log:printInfo("Started the service...");
         log:printInfo("Created the output directory: " + tmpDir);
     }
-    resource function get certificates/[string value]() returns http:InternalServerError|http:NotFound|error|http:Ok {
+    resource function get certificates/[string value]() returns http:NotFound|http:BadRequest|http:InternalServerError|error|http:Ok {
         string:RegExp r = re `-`;
         string[] data = r.split(value);
         string ID = data[1];
         string sheetName = data[0];
-        error?|http:NotFound err = certificateGeneration(fontFilePath, ID, sheetName);
-        if err is http:NotFound {
-            return err;
-        }
-        if err is error {
+        error?|http:NotFound|http:BadRequest err = certificateGeneration(fontFilePath, ID, sheetName);
+        if err !is () {
             return err;
         }
 
