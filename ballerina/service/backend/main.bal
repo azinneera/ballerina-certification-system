@@ -1,17 +1,13 @@
 // Copyright (c) 2024, WSO2 LLC. (https://www.wso2.com).
 // This line specifies the copyright holder and their website.
-
 // WSO2 LLC. licenses this file to you under the Apache License,
 // Version 2.0 (the "License"); you may not use this file except
 // in compliance with the License.
 // This block mentions the licensing terms under which the file is provided.
-
 // You may obtain a copy of the License at
 // This line provides the URL where you can find the full text of the Apache License, Version 2.0.
-
 // http://www.apache.org/licenses/LICENSE-2.0
 // This line gives the specific location where the License can be obtained.
-
 // Unless required by applicable law or agreed to in writing,
 // software distributed under the License is distributed on an
 // "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
@@ -24,11 +20,10 @@ import ballerina/file;
 import ballerina/http;
 import ballerina/io;
 import ballerina/jballerina.java;
-
-import ballerinax/googleapis.sheets as gsheets;
-import ballerinax/googleapis.drive as drive;
-import ballerina/log;
 import ballerina/lang.runtime;
+import ballerina/log;
+import ballerinax/googleapis.drive as drive;
+import ballerinax/googleapis.sheets as gsheets;
 
 type Auth record {|
     string clientId;
@@ -46,32 +41,13 @@ const PDF_EXTENSION = ".pdf";
 const NAME_COLUMN = "C";
 const CONTENT_TYPE = "application/pdf";
 
-gsheets:Client spreadsheetClient = check new ({
-    auth
-});
-
-drive:ConnectionConfig driveConfig = {
-    auth 
-};
-
+final gsheets:Client spreadsheetClient = check new ({auth});
+drive:ConnectionConfig driveConfig = {auth};
 drive:Client driveClient = check new (driveConfig);
-string tmpDir = "";
-string filePath = "";
-map<gsheets:Range> sheetRangeMap = {};
 
-function init() returns error? {
-    gsheets:Sheet[] sheets = check spreadsheetClient->getSheets(spreadsheetId);
-    foreach gsheets:Sheet sheet in sheets {
-        string sheetName = sheet.properties.title;
-        if sheetName == "Available UUIDs" {
-            continue;
-        }
-        gsheets:Column col = check spreadsheetClient->getColumn(spreadsheetId, sheetName, NAME_COLUMN);
-        string a1Notation = string `A2:${col.values.length()}`;
-        gsheets:Range range = check spreadsheetClient->getRange(spreadsheetId, sheetName, a1Notation);
-        sheetRangeMap[sheetName] = range;
-    }
-}
+final string tmpDir = check file:createTempDir();
+string filePath = "";
+final isolated map<gsheets:Range> sheetRangeMap = {};
 
 isolated function generatePdf(handle pdfGenerator) = @java:Method {
     'class: "org.PDFCreator.PDFGenerator",
@@ -83,15 +59,17 @@ isolated function generateParams(handle inputFilePath, handle replacement, handl
     name: "createInstance"
 } external;
 
-public function certificateGeneration(string fontFilePath, string checkID, string sheetName) 
+function certificateGeneration(string fontFilePath, string checkID, string sheetName)
     returns error?|http:NotFound|http:BadRequest {
-    
-    if !sheetRangeMap.hasKey(sheetName) {
-        return <http:BadRequest> {body: {message: "Invalid credential ID provided"}};
+    (int|string|decimal)[][] values;
+    lock {
+        if !sheetRangeMap.hasKey(sheetName) {
+            return <http:BadRequest>{body: {message: "Invalid credential ID provided"}};
+        }
+        values = sheetRangeMap.get(sheetName).values.clone();
     }
-    gsheets:Range range = sheetRangeMap.get(sheetName);
-
-    foreach var entry in range.values {
+    log:printInfo("Generating the certificate for " + sheetName + "-" + checkID);
+    foreach var entry in values {
         if entry[3].toString() != checkID {
             continue;
         }
@@ -105,10 +83,9 @@ public function certificateGeneration(string fontFilePath, string checkID, strin
         handle javastrName = java:fromString(replacement);
         handle javafontType = java:fromString(entry[7].toString());
 
-        handle certTemplateUrl = java:fromString(entry[8].toString());
-        string templatePath = check file:joinPath(tmpDir, "template", fileName);
-        check getCertTemplate(certTemplateUrl, templatePath);
-        
+        string certTemplateFile = entry[9].toString();
+        string templatePath = check file:joinPath(tmpDir, "template", certTemplateFile);
+
         handle javafontPath = java:fromString(fontFilePath);
         handle pdfpath = java:fromString(templatePath);
         handle javaOurputfileName = java:fromString(filePath);
@@ -116,10 +93,10 @@ public function certificateGeneration(string fontFilePath, string checkID, strin
         generatePdf(pdfData);
         return;
     }
-    return <http:NotFound> {body: {message: "No certificate found for the credential ID"}};
+    return <http:NotFound>{body: {message: "No certificate found for the credential ID: " + checkID}};
 }
 
-function getCertTemplate(handle url, string fileName) returns error? {
+isolated function getCertTemplate(handle url, string fileName) returns error? {
     http:Client httpEP = check new (url.toString(), followRedirects = {enabled: true});
     http:Response e = check httpEP->get("");
     io:Error? fileWriteBlocksFromStream = io:fileWriteBlocksFromStream(fileName, check e.getByteStream());
@@ -128,9 +105,29 @@ function getCertTemplate(handle url, string fileName) returns error? {
 }
 
 service / on new http:Listener(port) {
-
-    function init() returns error? {
-        tmpDir = check file:createTempDir();
+    isolated function init() returns error? {
+        log:printInfo("Initializing the service");
+        gsheets:Sheet[] sheets = check spreadsheetClient->getSheets(spreadsheetId);
+        foreach gsheets:Sheet sheet in sheets {
+            string sheetName = sheet.properties.title;
+            if sheetName == "Resources" {
+                gsheets:Column col = check spreadsheetClient->getColumn(spreadsheetId, sheetName, "B");
+                string a1Notation = string `B2:${col.values.length()}`;
+                gsheets:Range range = check spreadsheetClient->getRange(spreadsheetId, sheetName, a1Notation);
+                foreach var entry in range.values {
+                    handle templateUrl = java:fromString(entry[1].toString());
+                    string templatePath = check file:joinPath(tmpDir, "template", entry[0].toString());
+                    check getCertTemplate(templateUrl, templatePath);
+                }
+                continue;
+            }
+            gsheets:Column col = check spreadsheetClient->getColumn(spreadsheetId, sheetName, NAME_COLUMN);
+            string a1Notation = string `A2:${col.values.length()}`;
+            lock {
+                gsheets:Range range = check spreadsheetClient->getRange(spreadsheetId, sheetName, a1Notation);
+                sheetRangeMap[sheetName] = range;
+            }
+        }
         log:printInfo("Started the service...");
         log:printInfo("Created the output directory: " + tmpDir);
     }
@@ -141,10 +138,11 @@ service / on new http:Listener(port) {
         string sheetName = data[0];
         error?|http:NotFound|http:BadRequest err = certificateGeneration(fontFilePath, ID, sheetName);
         if err !is () {
+            log:printError("failed to generate certificate for credential ID: " + value);
             return err;
         }
 
-        byte[]|io:Error dataRead =  io:fileReadBytes(filePath);
+        byte[]|io:Error dataRead = io:fileReadBytes(filePath);
         if dataRead is io:Error {
             return <http:InternalServerError>{body: {message: dataRead.message()}};
         } else {
@@ -153,11 +151,11 @@ service / on new http:Listener(port) {
                 // ignore
             }
             string content_disposition = "inline; filename=" + value + ".pdf";
-            return <http:Ok>{headers: { Content\-Type: CONTENT_TYPE, Content\-Disposition: content_disposition }, body: dataRead};
+            return <http:Ok>{headers: {Content\-Type: CONTENT_TYPE, Content\-Disposition: content_disposition}, body: dataRead};
         }
     }
 }
 
-public function deleteFile(string filePath) returns error?{
+public function deleteFile(string filePath) returns error? {
     return check file:remove(filePath);
 }
