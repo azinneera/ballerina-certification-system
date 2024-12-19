@@ -46,7 +46,7 @@ drive:ConnectionConfig driveConfig = {auth};
 drive:Client driveClient = check new (driveConfig);
 
 final string tmpDir = check file:createTempDir();
-string filePath = "";
+isolated string filePath = "";
 final isolated map<gsheets:Range> sheetRangeMap = {};
 
 isolated function generatePdf(handle pdfGenerator) = @java:Method {
@@ -59,7 +59,7 @@ isolated function generateParams(handle inputFilePath, handle replacement, handl
     name: "createInstance"
 } external;
 
-function certificateGeneration(string fontFilePath, string checkID, string sheetName)
+isolated function certificateGeneration(string fontFilePath, string checkID, string sheetName)
     returns error?|http:NotFound|http:BadRequest {
     (int|string|decimal)[][] values;
     lock {
@@ -75,8 +75,10 @@ function certificateGeneration(string fontFilePath, string checkID, string sheet
         }
         string replacement = entry[2].toString();
         string fileName = replacement + checkID + PDF_EXTENSION;
-        filePath = check file:joinPath(tmpDir, fileName);
-
+        lock {
+            filePath = check file:joinPath(tmpDir, fileName);
+        }
+        
         int fontsize = check int:fromString(entry[4].toString());
         int centerX = check int:fromString(entry[5].toString());
         int centerY = check int:fromString(entry[6].toString());
@@ -88,9 +90,12 @@ function certificateGeneration(string fontFilePath, string checkID, string sheet
 
         handle javafontPath = java:fromString(fontFilePath);
         handle pdfpath = java:fromString(templatePath);
-        handle javaOurputfileName = java:fromString(filePath);
-        handle pdfData = generateParams(pdfpath, javastrName, javafontType, fontsize, centerX, centerY, javafontPath, javaOurputfileName);
-        generatePdf(pdfData);
+        lock {
+            handle javaOutputfileName = java:fromString(filePath);
+            handle pdfData = generateParams(
+                pdfpath, javastrName, javafontType, fontsize, centerX, centerY, javafontPath, javaOutputfileName);
+            generatePdf(pdfData);
+        }
         return;
     }
     return <http:NotFound>{body: {message: "No certificate found for the credential ID: " + checkID}};
@@ -131,7 +136,7 @@ service / on new http:Listener(port) {
         log:printInfo("Started the service...");
         log:printInfo("Created the output directory: " + tmpDir);
     }
-    resource function get certificates/[string value]() returns http:NotFound|http:BadRequest|http:InternalServerError|error|http:Ok {
+    isolated resource function get certificates/[string value]() returns http:NotFound|http:BadRequest|http:InternalServerError|error|http:Ok {
         string:RegExp r = re `-`;
         string[] data = r.split(value);
         string ID = data[1];
@@ -142,20 +147,26 @@ service / on new http:Listener(port) {
             return err;
         }
 
-        byte[]|io:Error dataRead = io:fileReadBytes(filePath);
+    byte[]|io:Error dataRead;
+        lock {
+            dataRead = io:fileReadBytes(filePath);
+        }
         if dataRead is io:Error {
             return <http:InternalServerError>{body: {message: dataRead.message()}};
         } else {
-            error? fileResult = deleteFile(filePath);
-            if fileResult is error {
-                // ignore
+            lock {
+                error? fileResult = deleteFile(filePath);
+                if fileResult is error {
+                    // ignore
+                }
             }
             string content_disposition = "inline; filename=" + value + ".pdf";
             return <http:Ok>{headers: {Content\-Type: CONTENT_TYPE, Content\-Disposition: content_disposition}, body: dataRead};
-        }
+            }
+        
     }
 }
 
-public function deleteFile(string filePath) returns error? {
+isolated function deleteFile(string filePath) returns error? {
     return check file:remove(filePath);
 }
