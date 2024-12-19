@@ -139,6 +139,10 @@ service / on new http:Listener(port) {
     isolated resource function get certificates/[string value]() returns http:NotFound|http:BadRequest|http:InternalServerError|error|http:Ok {
         string:RegExp r = re `-`;
         string[] data = r.split(value);
+        if data.length() < 2 {
+            log:printError("credential id:" + value + ", splitted: " + data[0]);
+            return <http:BadRequest>{body: {message: "invalid credential ID: " + value}};
+        }
         string ID = data[1];
         string sheetName = data[0];
         error?|http:NotFound|http:BadRequest err = certificateGeneration(fontFilePath, ID, sheetName);
@@ -162,8 +166,7 @@ service / on new http:Listener(port) {
             }
             string content_disposition = "inline; filename=" + value + ".pdf";
             return <http:Ok>{headers: {Content\-Type: CONTENT_TYPE, Content\-Disposition: content_disposition}, body: dataRead};
-            }
-        
+        }
     }
 }
 
